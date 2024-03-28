@@ -146,7 +146,7 @@ def upload_table_to_s3(
 def load_raw_data_to_s3(
     bucket: str,  # bucket name
     n: int, # number of rows
-    no_null: bool = False, # not null
+    no_null: bool = True, # not including null in the data, default to true
     verbose: bool = False # verbose print
 ):
     """
