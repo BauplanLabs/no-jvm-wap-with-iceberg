@@ -1,5 +1,4 @@
-service: u-madison-colab-spark-lambda
-useDotenv: true
+service: lambda-wap-with-iceberg
 
 provider:
   name: aws
@@ -7,17 +6,17 @@ provider:
   timeout: 900
   ecr:
     images:
-      umadisonsparkimage:
+      lambdawapimage:
         path: ./
         platform: linux/amd64
-  environment:
-    S3_USER: ${env:S3_USER}
-    S3_ACCESS: ${env:S3_ACCESS}
-    HOME: /tmp
 
 functions:
-  umadisonsparkrunner:
+  wap:
     ephemeralStorageSize: 3008
     image:
-      name: umadisonsparkimage
+      name: lambdawapimage
+    events:
+      - s3:
+          bucket: ${env:S3_USER}
+          events: s3:ObjectCreated:*
 

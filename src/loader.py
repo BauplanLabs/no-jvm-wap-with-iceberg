@@ -186,7 +186,7 @@ if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-bucket", help="S3 bucket to upload the parquet file to", required=True)
-    parser.add_argument("-n", help="Number of rows to generate", default=10000, type=int)
+    parser.add_argument("-n", help="Number of rows to generate", default=100, type=int)
     parser.add_argument("--no-null", help="If set, will not include nulls in the data", action="store_true")
     parser.add_argument("--verbose", help="If set, will print more information", action="store_true")
     # run the script
