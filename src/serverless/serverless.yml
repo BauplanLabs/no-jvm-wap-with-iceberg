@@ -1,0 +1,23 @@
+service: u-madison-colab-spark-lambda
+useDotenv: true
+
+provider:
+  name: aws
+  memorySize: 3008
+  timeout: 900
+  ecr:
+    images:
+      umadisonsparkimage:
+        path: ./
+        platform: linux/amd64
+  environment:
+    S3_USER: ${env:S3_USER}
+    S3_ACCESS: ${env:S3_ACCESS}
+    HOME: /tmp
+
+functions:
+  umadisonsparkrunner:
+    ephemeralStorageSize: 3008
+    image:
+      name: umadisonsparkimage
+
