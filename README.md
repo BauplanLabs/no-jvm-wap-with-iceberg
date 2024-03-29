@@ -22,6 +22,7 @@ kept to a minimum:
 * AWS credentials with appropriate permissions when the local scripts run;
 * the serverless framework to deploy the WAP lambda with one command;
 * Docker installed locally to prepare the lambda container.
+* BONUS: Slack, if you wish to receive failure notifications from the lambda; 
 * BONUS: a Snowflake account if you wish to query the post-ETL table with Snowflake!
 
 ### Installation
@@ -47,7 +48,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-In `src/serverless`, copy `local.env` to `.env` and fill in the required values: `SOURCE_BUCKET` is the name of the bucket simulating ingestion of raw data, `LAKE_BUCKET` is the bucket connected to the data catalog and containing the Iceberg version of the data.
+In `src/serverless`, copy `local.env` to `.env` and fill in the required values: `SOURCE_BUCKET` is the name of the bucket simulating ingestion of raw data, `LAKE_BUCKET` is the bucket connected to the data catalog and containing the Iceberg version of the data, `SLACK_TOKEN` and `SLACK_CHANNEL` are needed if you wish to send failure notifications to Slack - you can get a Bot Token by creating a new Slack App in your [Slack workspace](https://api.slack.com/tutorials/tracks/getting-a-token).
 
 #### AWS Lambda
 
@@ -57,6 +58,8 @@ The lambda is deployed with the serverless framework, so make sure it's installe
 cd src/serverless
 serverless deploy
 ```
+
+If you don't want to use Slack as a notification channel, leave the relevant variables in the `.env` file empty and the lambda will not attempt to send notifications.
 
 ## Run the project
 
@@ -70,23 +73,45 @@ Then cd into `src` and run the following command:
 python loader.py --no-null -n 1000 --verbose
 ```
 
-This will start the loader, which will write 1000 records to a table and upload it to the SOURCE_BUCKET in the `.env` file, triggering the lambda.
+This will start the loader, which will write 1000 records to a table and upload it to the SOURCE_BUCKET in the `.env` file, triggering the lambda. Note that this script will also created the datalake bucket if it doens't exist (we should perhaps move this part to the setip script with Nessie?).
 
 ### Start the webapp
 
+#TODO: my idea is that the web app is a simple streamlit app that for example my count how many rows there are in main, so everytime your refresh it it will show the updated count.
+
+Alternatively, it could also be a query over a branch that you can specify as an input field, such that it shows how many NULLs there are in case of failures.
 
 ### Scenarios
 
 #### No errors
 
+Running
+
+```bash
+python loader.py --no-null -n 1000 --verbose
+```
+
+will produce "properly formatted data", that will survive the quality checks (checking for nulls), and therefore result in the main table over in `main` to be updated with the new data.
 
 #### Errors
 
+Running
+
+```bash
+python loader.py -n 1000 --verbose
+```
+
+will produce data with NULLs, so the quality check in the lambda will fail, the upload branch won't be merged and the Slack channel should receive a notification.
 
 ## Bonus: querying the final table with Snowflake
+
+#TODO
 
 
 ## FAQs
 
+#TODO
 
 ## License
+
+#TODO

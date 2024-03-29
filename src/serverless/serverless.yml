@@ -14,6 +14,8 @@ provider:
   environment:
     SOURCE_BUCKET: ${env:SOURCE_BUCKET}
     LAKE_BUCKET: ${env:LAKE_BUCKET}
+    SLACK_TOKEN: ${env:SLACK_TOKEN}
+    SLACK_CHANNEL: ${env:SLACK_CHANNEL}
   stage: dev
   iamRoleStatements:
     - Effect: Allow
