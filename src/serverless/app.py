@@ -7,6 +7,7 @@ import pyarrow.parquet as pq
 from pyiceberg.catalog import load_catalog
 import monkey_patch
 from pyiceberg_patch_nessie import NessieCatalog
+from pyiceberg.expressions import IsNull
 # slack imports
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -111,7 +112,6 @@ def create_table_if_not_exists(catalog, table_name, branch, schema, datalake_loc
     # this is the result of the list_tables call when a table is there
     # [('main@2031105876d7dbd8f57fcff4820863edebf25fdbb7b75b184a915acd8cac5484', 'customer_data_log')]
     if any([table_name == t[1] for t in tables]):
-        print("Table already exists in the catalog")
         return False
     
     rt_0 = catalog.create_table(
@@ -152,7 +152,7 @@ def append_rows_to_table_in_branch(
     
     """
     try:
-        _table = catalog.load_table((branch_name, '', table_name))
+        _table = catalog.load_table((branch_name, table_name))
         _table.append(arrow_table)
     except Exception as e:
         print("Error appending rows to table: {}".format(e))
@@ -183,8 +183,21 @@ def run_quality_checks(
     The function returns True if the quality check is successful (no nulls!), False otherwise.
     
     """
+    # what's the column we should check for nulls?
+    target_column = "my_col_1"
+    
     try:
-        return False
+        # we get a reference to the iceberg table in the branch
+        _table = catalog.load_table((branch_name, table_name))
+        # we pushed down the scan by specifying 
+        # both a specific column and a filter
+        scan = _table.scan(
+            row_filter=IsNull(target_column),
+            selected_fields=(target_column)
+        ).to_arrow()
+        # we should have no results in the scan
+        return scan.num_rows == 0
+        
     except Exception as e:
         print("Quality check failed: {}".format(e))
         return False
@@ -260,8 +273,10 @@ def lambda_handler(event, context):
         _success = run_quality_checks(catalog, TABLE_NAME, branch_name)
         # if successful, merge the branch into the main table
         if _success:
-            print("Quality check passed, merging branch")
+            print("Quality check passed, merging branch: {}".format(branch_name))
             catalog.merge_branch(branch_name, 'main')
+            catalog.drop_branch(branch_name)
+            print("Branch merged and dropped")
         else:
             print("Quality check failed, not merging branch")
             # if not, send a slack alert
