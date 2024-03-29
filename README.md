@@ -48,7 +48,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-In `src/serverless`, copy `local.env` to `.env` and fill in the required values: `SOURCE_BUCKET` is the name of the bucket simulating ingestion of raw data, `LAKE_BUCKET` is the bucket connected to the data catalog and containing the Iceberg version of the data, `SLACK_TOKEN` and `SLACK_CHANNEL` are needed if you wish to send failure notifications to Slack - you can get a Bot Token by creating a new Slack App in your [Slack workspace](https://api.slack.com/tutorials/tracks/getting-a-token).
+In `src/serverless`, copy `local.env` to `.env` and fill in the required values: `SOURCE_BUCKET` is the name of the bucket simulating ingestion of raw data, `LAKE_BUCKET` is the bucket connected to the data catalog and containing the Iceberg version of the data, `SLACK_TOKEN` and `SLACK_CHANNEL` are needed if you wish to send failure notifications to Slack - you can get a Bot Token by creating a new Slack App in your [Slack workspace](https://api.slack.com/tutorials/tracks/getting-a-token). `NESSIE_ENDPOINT` is the URL of the Nessie service you just deployed with the above setup script.
 
 #### AWS Lambda
 

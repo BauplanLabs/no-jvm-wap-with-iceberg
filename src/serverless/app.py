@@ -5,9 +5,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 # data catalog imports
 from pyiceberg.catalog import load_catalog
+from pyiceberg.expressions import IsNull
 import monkey_patch
 from pyiceberg_patch_nessie import NessieCatalog
-from pyiceberg.expressions import IsNull
 # slack imports
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -193,17 +193,18 @@ def run_quality_checks(
         # both a specific column and a filter
         scan = _table.scan(
             row_filter=IsNull(target_column),
-            selected_fields=(target_column)
+            selected_fields=(target_column,) # need to pass a tuple!
         ).to_arrow()
-        # we should have no results in the scan
+        # we should have no results in the scan, so
+        # if the number of rows is 0, the quality check is successful
         return scan.num_rows == 0
         
     except Exception as e:
         print("Quality check failed: {}".format(e))
-        return False
+        
+    # if there is an exception, we return False
+    return False
     
-    return True
-
 
 def lambda_handler(event, context):
     """
@@ -237,7 +238,7 @@ def lambda_handler(event, context):
     catalog = load_catalog(
         name='default',
         type='nessie',
-        endpoint='https://nessieservice.90cuqda0rgpdi.us-east-1.cs.amazonlightsail.com',
+        endpoint=os.environ['NESSIE_ENDPOINT'],
         default_branch='main'
     )    
     # if the target table does not exist in main (first run), create it
@@ -274,7 +275,7 @@ def lambda_handler(event, context):
         # if successful, merge the branch into the main table
         if _success:
             print("Quality check passed, merging branch: {}".format(branch_name))
-            catalog.merge_branch(branch_name, 'main')
+            catalog.merge(branch_name, 'main')
             catalog.drop_branch(branch_name)
             print("Branch merged and dropped")
         else:

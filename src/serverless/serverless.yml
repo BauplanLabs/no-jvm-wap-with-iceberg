@@ -16,6 +16,7 @@ provider:
     LAKE_BUCKET: ${env:LAKE_BUCKET}
     SLACK_TOKEN: ${env:SLACK_TOKEN}
     SLACK_CHANNEL: ${env:SLACK_CHANNEL}
+    NESSIE_ENDPOINT: ${env:NESSIE_ENDPOINT}
   stage: dev
   iamRoleStatements:
     - Effect: Allow
