@@ -11,11 +11,12 @@ script.
 
 Example usage: 
 
-python loader.py -bucket mybucket --no-null -n 1000
+python loader.py --no-null -n 1000
 
-> upload a parquet file with 1000 rows, without nulls (so any data check for no-nulls will succeed), to the
-bucket named "mybucket". Make sure "mybucket" is the same one you used when deploying the lambda (check the
-README for the full setup).
+> upload a parquet file with 1000 rows, without nulls (so any data check for no-nulls will succeed).
+
+NOTE: the script will also create the target bucket if it does not exist, so you can run it without any setup.
+The source bucket is instead created by the lambda deployment script.
 
 """
 
@@ -69,8 +70,8 @@ def get_random_array_from_type(
     """
     a = [] if no_null else [None]
     rows = n if no_null else n - 1
-    if field.type == pa.int64():
-        return pa.array([randint(1, 131731739) for _ in range(rows)] + a)
+    if field.type == pa.int32():
+        return pa.array([randint(1, 1317317) for _ in range(rows)] + a)
     elif field.type == pa.string():
         return pa.array([fw.generate('ppo', separator=' ') for _ in range(rows)] + a)
     elif field.type == pa.float64():
@@ -127,7 +128,7 @@ def upload_table_to_s3(
     verbose: bool = False
 ):
     # write a parquet file in a temp directory and upload to s3
-    file_name = str(uuid.uuid4())
+    file_name = '{}.parquet'.format(uuid.uuid4())
     with tempfile.TemporaryDirectory() as tmpdirname:
         file_path = os.path.join(tmpdirname, file_name)
         if verbose:
@@ -144,6 +145,7 @@ def upload_table_to_s3(
     
 
 def load_raw_data_to_s3(
+    s3, # s3 client
     bucket: str,  # bucket name
     n: int, # number of rows
     no_null: bool = True, # not including null in the data, default to true
@@ -158,8 +160,7 @@ def load_raw_data_to_s3(
     # start processing
     print("\nStarting loader at {}".format(datetime.now()))
     
-    # verify the target bucket exists - get a boto3 client
-    s3 = boto3.resource("s3")
+    # verify the target bucket exists
     try:
         s3.meta.client.head_bucket(Bucket=bucket)
     except Exception as e:
@@ -181,17 +182,44 @@ def load_raw_data_to_s3(
     return
 
 
+def create_lake_bucket_if_not_exists(
+    s3,
+    target_bucket: str # the bucket hosting the data lake files
+):
+    try:
+        s3.meta.client.head_bucket(Bucket=target_bucket)
+        print(f"Data lake bucket {target_bucket} already exists.")
+    except Exception as e:
+        new_bucket = s3.create_bucket(Bucket=target_bucket)
+        print(f"Data lake bucket {target_bucket} created.")
+
+    return
+
 if __name__ == "__main__":
     import argparse
     # parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("-bucket", help="S3 bucket to upload the parquet file to", required=True)
     parser.add_argument("-n", help="Number of rows to generate", default=100, type=int)
     parser.add_argument("--no-null", help="If set, will not include nulls in the data", action="store_true")
     parser.add_argument("--verbose", help="If set, will print more information", action="store_true")
+    # import the environment variable containing the bucket name
+    # this is needed to upload the files in raw format and kick off the WAP process
+    from dotenv import load_dotenv
+    load_dotenv('serverless/.env')
+    assert os.environ['SOURCE_BUCKET'], "Please set the SOURCE_BUCKET environment variable"
+    # we need to make sure the target bucket exists before we start
+    assert os.environ['LAKE_BUCKET'], "Please set the LAKE_BUCKET environment variable"
+    target_bucket = os.environ['LAKE_BUCKET']
+    # get a boto3 client
+    s3 = boto3.resource("s3")
+    
+    # make sure we have a lake bucket
+    create_lake_bucket_if_not_exists(s3, target_bucket)
+
     # run the script
     load_raw_data_to_s3(
-        bucket=parser.parse_args().bucket,
+        s3=s3,
+        bucket=os.environ['SOURCE_BUCKET'],
         n=parser.parse_args().n,
         no_null=parser.parse_args().no_null,
         verbose=parser.parse_args().verbose

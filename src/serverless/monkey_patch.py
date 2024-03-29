@@ -1,6 +1,5 @@
 from enum import Enum
 from typing import Callable
-
 import pyiceberg.catalog as pic
 from pyiceberg.exceptions import NotInstalledError
 from pyiceberg.typedef import Properties

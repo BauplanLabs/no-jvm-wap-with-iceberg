@@ -3,10 +3,12 @@ FROM public.ecr.aws/lambda/python:3.10
 # install the few Python dependencies
 RUN pip3 install --upgrade pip \
     && yum install gcc gcc-c++ -y \
-    && pip3 install pyiceberg==0.6.0 pynessie==0.66.0 --target "${LAMBDA_TASK_ROOT}"
+    && pip3 install pyarrow==15.0.0 pyiceberg==0.6.0 pynessie==0.67.0 --target "${LAMBDA_TASK_ROOT}"
 
 ENV HOME=/home/aws
 
 COPY app.py ${LAMBDA_TASK_ROOT}
+COPY pyiceberg_patch_nessie.py ${LAMBDA_TASK_ROOT}
+COPY monkey_patch.py ${LAMBDA_TASK_ROOT}
 
 CMD [ "app.lambda_handler" ]

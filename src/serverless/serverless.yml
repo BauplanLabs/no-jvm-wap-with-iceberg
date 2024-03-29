@@ -1,14 +1,30 @@
 service: lambda-wap-with-iceberg
+useDotenv: true
 
 provider:
   name: aws
   memorySize: 3008
   timeout: 900
+  region: us-east-1
   ecr:
     images:
       lambdawapimage:
         path: ./
         platform: linux/amd64
+  environment:
+    SOURCE_BUCKET: ${env:SOURCE_BUCKET}
+    LAKE_BUCKET: ${env:LAKE_BUCKET}
+  stage: dev
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:GetObjectVersion
+      Resource: "arn:aws:s3:::${env:SOURCE_BUCKET}/*"
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+      Resource: "arn:aws:s3:::${env:LAKE_BUCKET}/*"
 
 functions:
   wap:
@@ -17,6 +33,5 @@ functions:
       name: lambdawapimage
     events:
       - s3:
-          bucket: ${env:S3_USER}
-          events: s3:ObjectCreated:*
-
+          bucket: ${env:SOURCE_BUCKET}
+          event: s3:ObjectCreated:*

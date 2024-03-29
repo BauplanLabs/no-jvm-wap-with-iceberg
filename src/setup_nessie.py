@@ -11,27 +11,21 @@ giving us a good start with this script).
 
 Example:
 
-python setup_nessie.py -v=create -n=NessieAppService
+python setup_nessie.py -v=create -n=nessieservice
 
 > creates a new container service named "NessieAppService" in Lightsail and deploys a container with the Nessie image.
 
-python setup_nessie.py -v=destroy -n=NessieAppService
-
-> destroys the container service named "NessieAppService" in Lightsail.
-
-
 """
 
+
 import boto3
-import json
 
 
-def deploy_lightsail_application():
+def deploy_lightsail_application(
+    service_name: str = 'nessieservice',
+):
     # Create a boto3 client for the Lightsail service
-    client = boto3.client('lightsail')
-    
-    # Specify the container service name
-    service_name = 'NessieAppService'
+    client = boto3.client('lightsail', region_name='us-east-1')
     
     # Create or identify your Lightsail container service
     # Note: This code assumes the service does not already exist and will create it.
@@ -64,7 +58,7 @@ def deploy_lightsail_application():
             'healthCheck': {
                 'path': '/',
                 'intervalSeconds': 10,
-                'timeoutSeconds': 10,
+                'timeoutSeconds': 5,
                 'healthyThreshold': 2,
                 'unhealthyThreshold': 2
             }
@@ -73,18 +67,16 @@ def deploy_lightsail_application():
     
     # Create a new deployment with the specified container
     print("Creating new deployment...")
-    client.create_container_service_deployment(
+    _result = client.create_container_service_deployment(
         serviceName=service_name,
         containers=deployment['containers'],
         publicEndpoint=deployment['publicEndpoint']
     )
     
     print(f"Deployment created. Container service '{service_name}' is deploying the specified container.")
-    
-    return
-
-
-def destroy_lightsail_application():
+    print("\nNessie will be available soon at {}: check the Lightsail dashboard for the Status".format(
+        _result['containerService']['url']
+    ))
     
     return
 
@@ -99,8 +91,10 @@ if __name__ == '__main__':
     parser.add_argument("--verbose", help="If set, will print more information", action="store_true")
     
     if parser.parse_args().v == 'create':
-        deploy_lightsail_application()
-    elif parser.parse_args().v == 'destroy':
-        destroy_lightsail_application()
+        deploy_lightsail_application(
+            service_name=parser.parse_args().n
+        )
+    else:
+        raise NotImplementedError("Only the 'create' action is implemented.")
     
 

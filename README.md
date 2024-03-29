@@ -26,10 +26,51 @@ kept to a minimum:
 
 ### Installation
 
+#### Setup Nessie
+
+The Nessie server is deployed as a Lightsail service, and the installation is available as a simple `boto3` script:
+
+```bash
+cd src
+python setup_nessie.py -v=create -n=nessieservice
+```
+
+After the script runs, you should get in the terminal the URL of the Nessie service, which we will use to interact with the data catalog. Check with the AWS Lighsail console if the service is finished deployed and the endpoint is up.
+
+#### Local environment
+
+Prepare a virtual environment and install the dependencies for the local scripts:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+In `src/serverless`, copy `local.env` to `.env` and fill in the required values: `SOURCE_BUCKET` is the name of the bucket simulating ingestion of raw data, `LAKE_BUCKET` is the bucket connected to the data catalog and containing the Iceberg version of the data.
+
+#### AWS Lambda
+
+The lambda is deployed with the serverless framework, so make sure it's installed. Then, you can deploy the lambda with:
+
+```bash
+cd src/serverless
+serverless deploy
+```
+
 ## Run the project
+
+Make sure the python environment is activated and the `.env` file is properly configured.
 
 ### Start the loader
 
+Then cd into `src` and run the following command:
+
+```bash
+python loader.py --no-null -n 1000 --verbose
+```
+
+This will start the loader, which will write 1000 records to a table and upload it to the SOURCE_BUCKET in the `.env` file, triggering the lambda.
 
 ### Start the webapp
 
