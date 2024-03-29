@@ -1,16 +1,24 @@
 import os
-import boto3
+from time import time
+# arrow imports
 import pyarrow as pa
 import pyarrow.parquet as pq
+# data catalog imports
 from pyiceberg.catalog import load_catalog
 import monkey_patch
 from pyiceberg_patch_nessie import NessieCatalog
-from time import time
+# slack imports
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 # preload the friendlywords package
 import friendlywords as fw
 fw.preload()
+
+
+# name of the table in the Nessie catalog
+# we have only one table, to which we append the new rows
+# as they come in in the source bucket
+TABLE_NAME = 'customer_data_log'
 
 
 # decorator
@@ -32,7 +40,10 @@ def measure_func(func):
 
 
 @measure_func
-def send_slack_alert():
+def send_slack_alert(
+    table_name,
+    branch_name
+):
     """
     
     Send a slack alert to the channel specified in the environment variables.
@@ -51,7 +62,7 @@ def send_slack_alert():
     slack_channel = os.environ['SLACK_CHANNEL']
     
     client = WebClient(token=slack_token)
-    message = "test test test"
+    message = "Quality check failed on table {} in branch {}".format(table_name, branch_name)
 
     try:
         result = client.chat_postMessage(
@@ -84,6 +95,103 @@ def read_rows_into_arrow(record) -> pa.Table:
     return cnt_table
 
 
+@measure_func
+def create_table_if_not_exists(catalog, table_name, branch, schema, datalake_location):
+    """
+    
+    Create a table in the Nessie catalog if it does not exist by first checking
+    the tables in the main branch, and then creating the table with the schema.
+    
+    Note that we return True if the table is created, False otherwise (in theory,
+    just on the first run the table should get created).
+    
+    """
+    tables = catalog.list_tables('main')
+    print("Tables in the catalog in {}: {}".format(branch, tables))
+    # this is the result of the list_tables call when a table is there
+    # [('main@2031105876d7dbd8f57fcff4820863edebf25fdbb7b75b184a915acd8cac5484', 'customer_data_log')]
+    if any([table_name == t[1] for t in tables]):
+        print("Table already exists in the catalog")
+        return False
+    
+    rt_0 = catalog.create_table(
+        identifier=('main', table_name),
+        schema=schema,
+        location=datalake_location,
+    )
+    tables = catalog.list_tables('main')
+    print("Now Tables in the catalog in {}: {}".format(branch, tables))
+    
+    return True
+
+
+@measure_func
+def create_branch_from_main(catalog):
+    """
+    
+    Create a random branch with a human readable name starting from main.
+    
+    """
+    
+    branch_name = fw.generate('ppo', separator='-')
+    catalog.create_branch(branch_name, 'main')
+
+    return branch_name
+
+
+@measure_func
+def append_rows_to_table_in_branch(
+    catalog, 
+    table_name, 
+    branch_name, 
+    arrow_table
+    ):
+    """
+    
+    Add the new rows in the arrow table to the table in the branch.
+    
+    """
+    try:
+        _table = catalog.load_table((branch_name, '', table_name))
+        _table.append(arrow_table)
+    except Exception as e:
+        print("Error appending rows to table: {}".format(e))
+        return False
+    
+    return True
+
+@measure_func
+def run_quality_checks(
+    catalog, 
+    table_name, 
+    branch_name
+):
+    """
+    
+    Run quality checks on the table in the branch, which by this point should
+    contain all the new rows (and the old one). 
+    
+    Obviously, this is a simulation, and we could have just use the arrow table representing
+    the new rows to obtain the exact same result. However, by reading back the rows from the
+    Iceberg table, we are simulating a further processing step in the pipeline that could happen
+    literally anywhere, for example in a Dremio / Trino job, a separate Python script, a
+    Snowflake query etc.
+    
+    Moreover, we provide a working example of leveraging the Nessie catalog with Pyiceberg
+    to perform a S3 scan using Python.
+    
+    The function returns True if the quality check is successful (no nulls!), False otherwise.
+    
+    """
+    try:
+        return False
+    except Exception as e:
+        print("Quality check failed: {}".format(e))
+        return False
+    
+    return True
+
+
 def lambda_handler(event, context):
     """
     
@@ -109,30 +217,58 @@ def lambda_handler(event, context):
         print("No records found in the event")
         return None
     
+    # this is needed so that pynessie can write to the local filesystem
+    # some configuration for the user...
+    os.environ['NESSIEDIR'] = '/tmp'
     # initialize the Nessie catalog
-    #catalog = load_catalog(
-    #    name='default',
-    #    type='nessie',
-    #    endpoint='https://nessieservice.90cuqda0rgpdi.us-east-1.cs.amazonlightsail.com',
-    #    default_branch='main'
-    #)
+    catalog = load_catalog(
+        name='default',
+        type='nessie',
+        endpoint='https://nessieservice.90cuqda0rgpdi.us-east-1.cs.amazonlightsail.com',
+        default_branch='main'
+    )    
+    # if the target table does not exist in main (first run), create it
     datalake_location = 's3://{}'.format(os.environ['LAKE_BUCKET'])
     # loop over the records, even if it should be 1
     for record in records:
         # get the new rows out as an arrow table
         arrow_table = read_rows_into_arrow(record)
-        # create a new branch in the catalog
-        #branch_name = fw.generate('ppo', separator='-')
-        #print("Creating branch {}".format(branch_name))
-        #catalog.create_branch(branch_name, 'main')
+        # make sure the table in main is there (it won't be there at the first run)
+        # we use the current schema to create the table for simplicity
+        is_created = create_table_if_not_exists(
+            catalog, 
+            TABLE_NAME, 
+            'main', 
+            arrow_table.schema, 
+            datalake_location
+        )
+        print("Table created: {}".format(is_created))
+        # create a new branch in the catalog from main
+        branch_name = create_branch_from_main(catalog)
+        print("Branch created: {}".format(branch_name))
         # write the new rows to the branch
-        
+        _appended = append_rows_to_table_in_branch(
+            catalog, 
+            TABLE_NAME, 
+            branch_name, 
+            arrow_table
+        )
+        if not _appended:
+            print("Error appending rows to branch")
+            return None
         # quality check the rows in the branch (simulation)
-        # is_successful = quality_check(table_name, branch_name)
+        _success = run_quality_checks(catalog, TABLE_NAME, branch_name)
         # if successful, merge the branch into the main table
-        
-        # if not, send a slack alert
-        _sent = send_slack_alert()
+        if _success:
+            print("Quality check passed, merging branch")
+            catalog.merge_branch(branch_name, 'main')
+        else:
+            print("Quality check failed, not merging branch")
+            # if not, send a slack alert
+            _sent = send_slack_alert(
+                table_name=TABLE_NAME,
+                branch_name=branch_name
+            )
 
     return None
 

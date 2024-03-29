@@ -25,8 +25,11 @@ provider:
       Resource: "arn:aws:s3:::${env:SOURCE_BUCKET}/*"
     - Effect: Allow
       Action:
-        - s3:PutObject
-      Resource: "arn:aws:s3:::${env:LAKE_BUCKET}/*"
+        - s3:*
+      Resource: 
+      - "arn:aws:s3:::${env:LAKE_BUCKET}"
+      - "arn:aws:s3:::${env:LAKE_BUCKET}/*"
+      - "arn:aws:s3:::${env:LAKE_BUCKET}/metadata/*"
 
 functions:
   wap:
