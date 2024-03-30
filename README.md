@@ -105,10 +105,13 @@ will produce data with NULLs, so the quality check in the lambda will fail, the 
 
 ## Bonus: querying the final table with Snowflake
 
+A consequence of using Iceberg tables for ingestions and ETL is that we can move out of the warehouse costly data quality checks and still leverage the warehouse for querying the final, certified data. In this bonus section, we show how to query the final table in Snowflake.
 
-[external volume](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume)
-[external catalog](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration)
-[create table from metadata](https://docs.snowflake.com/en/user-guide/tables-iceberg-create#label-tables-iceberg-create-catalog-int): check the current metadata file associated with the table in the main branch in [Nessie][images/nessie.png] and use the `METADATA_FILE_PATH` to create the table in Snowflake.
+Settinp up Snowflake to query the table we created in the data lake is quite cumbersome but not hard: unfortunately it seems to be a manual process between AWS IAM roles and Snowflake instructions, as detailed in these three steps (you need all three):
+
+* add your S3 bucket with the data lake file as an [external volume](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume);
+* configure an [external catalog](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration) for Iceberg tables;
+* finally, [create a Snowflake table from Iceberge metadata](https://docs.snowflake.com/en/user-guide/tables-iceberg-create#label-tables-iceberg-create-catalog-int) (it's a no-op, only involving metadata): to finalize it, check the current metadata file associated with the table in the main branch in [Nessie][images/nessie.png] and use the `METADATA_FILE_PATH` to create the table in Snowflake -> e.g.
 
 ```sql
 CREATE ICEBERG TABLE customer_cleaned_data
@@ -117,11 +120,15 @@ CREATE ICEBERG TABLE customer_cleaned_data
   METADATA_FILE_PATH='metadata/00002-3a8edd9f-8403-4c0f-b77f-e2ea02829848.metadata.json';
 ```
 
-Run any query [you like in the Snwoflake UI](images/snowflake.png): in this case, we are calculating the sum of a column, the average of another and the total number of rows in the table (note that the total number of rows is the same as what is displayed in the webapp).
+In this case, we are creating a table called `CUSTOMER_CLEANED_DATA` in Snowflake that represents the rows in our ingestion table after they have been cleaned up and certified by our WAP process. Once you have the table, you can run any query [you like in the Snwoflake UI](images/snowflake.png): e.g. we compute the sum of a column, the average of another and the total number of rows in the table (note that the total number of rows is the same as what is displayed in our webapp above!).
 
 ```sql
 SELECT SUM(MY_COL_0), AVG(MY_COL_2), COUNT(*) AS TOT_ROWS FROM CUSTOMER_CLEANED_DATA;
 ```
+
+Of course, now that the volume and catalog are set up, you could leverage the Snowflake Python connector to automatically create the table from the metadata file after every merge, by reading the metadata from PyIceberg in the lambda itself.
+
+We leave this as an exercise to the reader!
 
 ## FAQs
 
