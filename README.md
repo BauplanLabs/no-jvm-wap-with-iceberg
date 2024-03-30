@@ -105,8 +105,23 @@ will produce data with NULLs, so the quality check in the lambda will fail, the 
 
 ## Bonus: querying the final table with Snowflake
 
-#TODO
 
+[external volume](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume)
+[external catalog](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration)
+[create table from metadata](https://docs.snowflake.com/en/user-guide/tables-iceberg-create#label-tables-iceberg-create-catalog-int): check the current metadata file associated with the table in the main branch in [Nessie][images/nessie.png] and use the `METADATA_FILE_PATH` to create the table in Snowflake.
+
+```sql
+CREATE ICEBERG TABLE customer_cleaned_data
+  EXTERNAL_VOLUME='icebergwapvolume'
+  CATALOG='myWapInt'
+  METADATA_FILE_PATH='metadata/00002-3a8edd9f-8403-4c0f-b77f-e2ea02829848.metadata.json';
+```
+
+Run any query [you like in the Snwoflake UI](images/snowflake.png): in this case, we are calculating the sum of a column, the average of another and the total number of rows in the table (note that the total number of rows is the same as what is displayed in the webapp).
+
+```sql
+SELECT SUM(MY_COL_0), AVG(MY_COL_2), COUNT(*) AS TOT_ROWS FROM CUSTOMER_CLEANED_DATA;
+```
 
 ## FAQs
 
