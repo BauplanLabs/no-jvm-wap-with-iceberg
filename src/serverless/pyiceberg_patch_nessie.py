@@ -1,46 +1,28 @@
 import re
-from dataclasses import dataclass
 from typing import (
-    TYPE_CHECKING,
     Any,
-    Dict,
     List,
     Optional,
     Set,
-    Type,
     Union,
 )
 
 import pynessie
 import pynessie.model
-from pydantic import Field
 from pyiceberg.catalog import (
-    EXTERNAL_TABLE,
-    ICEBERG,
-    LOCATION,
-    METADATA_LOCATION,
-    TABLE_TYPE,
     Catalog,
     Identifier,
     Properties,
     PropertiesUpdateSummary,
 )
-from pyiceberg.exceptions import (
-    NamespaceAlreadyExistsError,
-    NamespaceNotEmptyError,
-    NoSuchIcebergTableError,
-    NoSuchNamespaceError,
-    NoSuchTableError,
-    TableAlreadyExistsError,
-)
-from pyiceberg.io import FileIO, load_file_io
+from pyiceberg.io import load_file_io
 from pyiceberg.partitioning import UNPARTITIONED_PARTITION_SPEC, PartitionSpec
-from pyiceberg.schema import Schema, SchemaVisitor, visit
+from pyiceberg.schema import Schema
 from pyiceberg.serializers import FromInputFile
 from pyiceberg.table import CommitTableRequest, CommitTableResponse, Table, update_table_metadata
 from pyiceberg.table.metadata import new_table_metadata
 from pyiceberg.table.sorting import UNSORTED_SORT_ORDER, SortOrder
-from pyiceberg.typedef import EMPTY_DICT, IcebergBaseModel
+from pyiceberg.typedef import EMPTY_DICT
 
 PYNESSIE_TABLE_TYPES = [pynessie.model.ICEBERG_TABLE_TYPE_NAME]
 PYNESSIE_NAMESPACE_TYPES = [pynessie.model.NAMESPACE_TYPE_NAME]
@@ -157,8 +139,7 @@ class NessieCatalog(Catalog):
         return self.load_table(identifier)
 
     def register_table(self, identifier: Union[str, Identifier], metadata_location: str) -> Table:
-        # TODO
-        raise NotImplementedError
+        raise NotImplementedError('Not yet implemented')
 
     def _commit_table(self, table_request: CommitTableRequest) -> CommitTableResponse:
         nessie_identifier = NessieIdentifier(
@@ -330,19 +311,4 @@ class NessieCatalog(Catalog):
     def _drop_content(
         self, nessie_identifier: NessieIdentifier
     ) -> tuple[pynessie.model.IcebergTable, pynessie.model.Branch]:
-        assert nessie_identifier.branch_hash is not None, 'No hash'
-
-        old_content = self.nessie.get_content(
-            nessie_identifier.branch_name_with_hash, nessie_identifier.content_key
-        )
-        assert isinstance(old_content, pynessie.model.IcebergTable), 'Not a table'
-
-        new_reference = self.nessie.commit(
-            nessie_identifier.branch_name,
-            nessie_identifier.branch_hash,
-            f'DROP TABLE {nessie_identifier.content_key.to_string()}',
-            'lbigon@gmail.com',
-            pynessie.model.Delete(nessie_identifier.content_key),
-        )
-
-        return old_content, new_reference
+        raise NotImplementedError('Not yet implemented')

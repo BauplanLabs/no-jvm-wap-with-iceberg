@@ -172,13 +172,20 @@ def run_quality_checks(
     contain all the new rows (and the old one). 
     
     Obviously, this is a simulation, and we could have just use the arrow table representing
-    the new rows to obtain the exact same result. However, by reading back the rows from the
-    Iceberg table, we are simulating a further processing step in the pipeline that could happen
-    literally anywhere, for example in a Dremio / Trino job, a separate Python script, a
-    Snowflake query etc.
+    the new rows to obtain the exact same result instead of reading back the rows from the
+    object storage!
+    
+    However, by reading back the rows from the Iceberg table, we are simulating the possibility of
+    doing a further processing step in the pipeline that could happen literally anywhere,
+    for example in a Dremio / Trino job, a separate Python script within a larger orchestration platform, 
+    a Snowflake query etc. 
+    
+    Note that here we could have also used SQL instead of Python, for example by running duckdb queries 
+    on the arrow table directly in-process.
     
     Moreover, we provide a working example of leveraging the Nessie catalog with Pyiceberg
-    to perform a S3 scan using Python.
+    to perform a S3 scan using Python, which we believe is a useful feature to have anyway, even
+    setting aside WAP.
     
     The function returns True if the quality check is successful (no nulls!), False otherwise.
     
