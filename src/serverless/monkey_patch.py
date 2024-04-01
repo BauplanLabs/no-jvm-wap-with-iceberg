@@ -1,6 +1,6 @@
 """
 
-This is a utility script that monkey patches the pyiceberg library to support the Nessie catalog (yay Python!).
+This is a utility script that monkey patches PyIceberg to support the Nessie catalog (yay Python!).
 For all intents and purposes, you can ignore these details and just treat the catalog in the app.py script 
 as your main abstraction.
 

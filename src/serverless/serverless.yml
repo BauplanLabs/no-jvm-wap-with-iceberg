@@ -41,3 +41,4 @@ functions:
       - s3:
           bucket: ${env:SOURCE_BUCKET}
           event: s3:ObjectCreated:*
+          existing: true

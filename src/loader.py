@@ -15,9 +15,6 @@ python loader.py --no-null -n 1000
 
 > upload a parquet file with 1000 rows, without nulls (so any data check for no-nulls will succeed).
 
-NOTE: the script will also create the target bucket if it does not exist, so you can run it without any setup.
-The source bucket is instead created by the lambda deployment script.
-
 """
 
 import os
@@ -182,19 +179,6 @@ def load_raw_data_to_s3(
     return
 
 
-def create_lake_bucket_if_not_exists(
-    s3,
-    target_bucket: str # the bucket hosting the data lake files
-):
-    try:
-        s3.meta.client.head_bucket(Bucket=target_bucket)
-        print(f"Data lake bucket {target_bucket} already exists.")
-    except Exception as e:
-        new_bucket = s3.create_bucket(Bucket=target_bucket)
-        print(f"Data lake bucket {target_bucket} created.")
-
-    return
-
 if __name__ == "__main__":
     import argparse
     # parse arguments
@@ -207,15 +191,8 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv('serverless/.env')
     assert os.environ['SOURCE_BUCKET'], "Please set the SOURCE_BUCKET environment variable"
-    # we need to make sure the target bucket exists before we start
-    assert os.environ['LAKE_BUCKET'], "Please set the LAKE_BUCKET environment variable"
-    target_bucket = os.environ['LAKE_BUCKET']
     # get a boto3 client
     s3 = boto3.resource("s3")
-    
-    # make sure we have a lake bucket
-    create_lake_bucket_if_not_exists(s3, target_bucket)
-
     # run the script
     load_raw_data_to_s3(
         s3=s3,

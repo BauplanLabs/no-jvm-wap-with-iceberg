@@ -1,3 +1,12 @@
+"""
+
+Monkeypatch for PyIceberg to support Nessie as a catalog backing Iceberg tables. As Nessie
+is not officially supported, this patch (to the best of our knowledge) is the first
+open example of how to use Nessie with PyIceberg.
+
+"""
+
+
 import re
 from typing import (
     Any,
@@ -132,7 +141,7 @@ class NessieCatalog(Catalog):
             nessie_identifier.branch_name,
             nessie_identifier.branch_hash,
             f'CREATE TABLE {nessie_identifier.content_key.to_string()}',
-            'lbigon@gmail.com',
+            'jacopo.tagliabue@bauplanlabs.com',
             pynessie.model.Put(nessie_identifier.content_key, new_iceberg_table),
         )
 
@@ -161,7 +170,6 @@ class NessieCatalog(Catalog):
 
         updated_metadata = update_table_metadata(base_metadata, table_request.updates)
         if updated_metadata == base_metadata:
-            # no changes, do nothing
             return CommitTableResponse(
                 metadata=base_metadata,
                 metadata_location=current_table.metadata_location,
@@ -187,7 +195,7 @@ class NessieCatalog(Catalog):
             nessie_identifier.branch_name,
             nessie_identifier.branch_hash,
             f'APPEND TABLE {nessie_identifier.content_key.to_string()}',
-            'lbigon@gmail.com',
+            'jacopo.tagliabue@bauplanlabs.com',
             pynessie.model.Put(nessie_identifier.content_key, new_iceberg_table),
         )
 

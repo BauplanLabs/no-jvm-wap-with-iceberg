@@ -15,10 +15,15 @@ python setup_nessie.py -v=create -n=nessieservice
 
 > creates a new container service named "NessieAppService" in Lightsail and deploys a container with the Nessie image.
 
+Note that every time you run it, the script will try to create (if not already created) the source and lake buckets
+to store the raw and transformed data (Iceberg tables), respectively. Make sure your .env file is filled
+correctly as specified in the README.
+
 """
 
 
 import boto3
+import os
 
 
 def deploy_lightsail_application(
@@ -81,6 +86,54 @@ def deploy_lightsail_application(
     return
 
 
+def create_bucket_if_not_exists(
+    s3,
+    target_bucket: str
+) -> bool:
+    """
+    
+    Create a bucket in S3 if it does not exist and return True
+    if the bucket is created, False otherwise (already exists).
+    
+    """
+    
+    try:
+        s3.meta.client.head_bucket(Bucket=target_bucket)
+        print(f"Data lake bucket {target_bucket} already exists.")
+        return False
+    except Exception as e:
+        new_bucket = s3.create_bucket(Bucket=target_bucket)
+        print(f"Data lake bucket {target_bucket} created.")
+
+    return True
+
+
+def create_buckets(
+    source_bucket: str,
+    lake_bucket: str
+):
+    """
+    
+    Create the source and lake buckets if they don't exist. The source bucket
+    is where the raw data is stored / uploaded, and the lake bucket is where the transformed
+    data is stored as an Iceberg table.
+    
+    """
+    
+    # get a boto3 client
+    s3 = boto3.resource("s3")
+    # create the source bucket
+    _is_created = create_bucket_if_not_exists(s3, source_bucket)
+    if _is_created:
+        print(f"Source bucket {source_bucket} created.")
+    # create the lake bucket
+    _is_created = create_bucket_if_not_exists(s3, lake_bucket)
+    if _is_created:
+        print(f"Lake bucket {lake_bucket} created.")
+    
+    return True
+
+
 if __name__ == '__main__':
     # parse the CLI arguments
     import argparse
@@ -90,11 +143,19 @@ if __name__ == '__main__':
     # add a verbose flag for more verbose debugging
     parser.add_argument("--verbose", help="If set, will print more information", action="store_true")
     
+    from dotenv import load_dotenv
+    load_dotenv('serverless/.env')
+    # we need to make sure the two buckets exist before we start
+    assert os.environ['SOURCE_BUCKET'], "Please set the SOURCE_BUCKET environment variable"
+    assert os.environ['LAKE_BUCKET'], "Please set the LAKE_BUCKET environment variable"
+    source_bucket = os.environ['SOURCE_BUCKET']
+    lake_bucket = os.environ['LAKE_BUCKET']
+    # we create the two buckets if they don't exist
+    create_buckets(source_bucket, lake_bucket)
+    # now, if the action is 'create', we deploy the container service
     if parser.parse_args().v == 'create':
         deploy_lightsail_application(
             service_name=parser.parse_args().n
         )
     else:
         raise NotImplementedError("Only the 'create' action is implemented.")
-    
-

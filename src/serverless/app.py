@@ -1,3 +1,21 @@
+"""
+
+This is the main Python file for the lambda. lambda_handler is the entry point
+and it's triggered by an S3 event (every time a new file is uploaded to the source bucket, which
+in this project happens when we run the loader.py from our laptop).
+
+The function leverages the PyIceberg library to interact with the Nessie catalog (thanks to
+our integration with PyNessie and monkey patching) and provide the WAP logic:
+
+* read the new rows from the S3 event into an arrow table;
+* create an uploading new branch in the Nessie catalog from main;
+* append the new rows to the table in the branch;
+* run a quality check on the new rows re-using PyCessie to scan the table back in the branch;
+* if the quality check is successful, merge the branch into the main table.
+
+"""
+
+
 import os
 from time import time
 # arrow imports
@@ -57,7 +75,7 @@ def send_slack_alert(
     # otherwise we just return
     if not (os.environ['SLACK_TOKEN'] and os.environ['SLACK_CHANNEL']):
         print("Slack envs not set, skipping alert")
-        return None
+        return False
 
     slack_token = os.environ['SLACK_TOKEN']
     slack_channel = os.environ['SLACK_CHANNEL']
@@ -75,7 +93,7 @@ def send_slack_alert(
     except SlackApiError as e:
         print(f"Error sending message: {e.response['error']}")
     
-    return None
+    return False
 
 
 @measure_func
@@ -286,12 +304,14 @@ def lambda_handler(event, context):
             catalog.drop_branch(branch_name)
             print("Branch merged and dropped")
         else:
-            print("Quality check failed, not merging branch")
             # if not, send a slack alert
+            print("Quality check failed, not merging branch")
             _sent = send_slack_alert(
                 table_name=TABLE_NAME,
                 branch_name=branch_name
             )
+            if _sent:
+                print("Slack alert sent")
 
     return None
 
