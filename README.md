@@ -6,7 +6,9 @@ We aim to provide a no-nonsense, reference implementation for the Write-Audit-Pu
 
 In the spirit of interoperability, we provide an example downstream application (a quality dashboard) - that also avoids the JVM and can run entirely within a Python interpreter -, and a bonus section on how to query the final table with Snowflake: fully leveraging the lakehouse pattern, we can move (at least some) data quality checks _outside the warehouse_ and still take advantage of Snowflake for querying certified artifacts.
 
-Note that the project is not intended to be a production-ready solution, but rather a reference implementation that can be used as a starting point for more complex scenarios: all the code is verbose and heavily commented, making it easy to modify and extend the basic concepts to better suit your use cases.
+Note that the project is not intended to be a production-ready solution, but rather a reference implementation that can be used as a starting point for more complex scenarios: the code is verbose and heavily commented, making it easy to modify and extend the basic concepts to better suit your use cases.
+
+If you have feedback, wish to contribute or want help with your own data lake setup, please do reach out to us at `info at bauplanlabs dot com`. 
 
 ## Setup
 
@@ -15,15 +17,15 @@ Note that the project is not intended to be a production-ready solution, but rat
 The intent of this project is mostly pedagogical, so dependencies and frameworks have been
 kept to a minimum:
 
-* AWS credentials with appropriate permissions when the local scripts run;
+* AWS credentials with appropriate permissions when the local scripts run (create buckets, upload files to bucket, read from bucket, create Lightsail service);
 * the [serverless framework](https://www.serverless.com/framework/) to deploy the WAP lambda with one command;
 * Docker installed locally to prepare the lambda container.
-* BONUS: Slack, if you wish to receive failure notifications from the lambda on Slack; 
+* BONUS: Slack and a Slack App token, if you wish to receive failure notifications on Slack; 
 * BONUS: a Snowflake account if you wish to query the post-ETL table with Snowflake.
 
 ### Installation
 
-#### Setup S3 buckets and a Nessie catalog
+#### Setup the S3 buckets and the Nessie catalog
 
 In `src/serverless`, copy `local.env` to `.env` and fill the values for two buckets: `SOURCE_BUCKET` is the name of the bucket simulating ingestion of raw data, `LAKE_BUCKET` is the bucket that we connect to the data catalog, containing the Iceberg version of the data. 
 
@@ -34,7 +36,7 @@ cd src
 python setup_nessie.py -v=create -n=nessieservice
 ```
 
-After the script runs, you should get in the terminal the URL of the Nessie service, which we will use to interact with the data catalog. _Before continuing, check with the AWS Lighsail console if the service is finished deployed and the endpoint is up._
+After the script runs, you should get in the terminal the URL of the Nessie service, which we will use to interact with the data catalog (write it down for later). _Before continuing, make sure in the Lightsail console that the service is finished deployed and the endpoint is up._
 
 #### Local environment
 
@@ -46,7 +48,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Fill the rest of the `.env` file with the following variables: `SLACK_TOKEN` and `SLACK_CHANNEL` are needed if you wish to send failure notifications to Slack - you can get a Bot Token by creating a new Slack App in your [Slack workspace](https://api.slack.com/tutorials/tracks/getting-a-token).`NESSIE_ENDPOINT` is the URL of the Nessie service you just deployed with the above setup script.
+Fill the rest of the `.env` file with the following variables: `SLACK_TOKEN` and `SLACK_CHANNEL` are needed if you wish to send failure notifications to Slack - you can get an App Bot Token by creating a new Slack App in your [Slack workspace](https://api.slack.com/tutorials/tracks/getting-a-token).`NESSIE_ENDPOINT` is the URL of the Nessie service you just deployed.
 
 #### AWS Lambda
 
@@ -71,7 +73,7 @@ Then cd into `src` and run the following command:
 python loader.py --no-null -n 1000 --verbose
 ```
 
-The loader scrit will write 1000 records to a table and upload it to `SOURCE_BUCKET`, triggering the lambda.
+The loader will upload 1000 randomized records to `SOURCE_BUCKET`, triggering the WAP lambda.
 
 ### Start the webapp
 
@@ -81,25 +83,8 @@ Alternatively, it could also be a query over a branch that you can specify as an
 
 ### Scenarios
 
-#### No errors
-
-Running
-
-```bash
-python loader.py --no-null -n 1000 --verbose
-```
-
-will produce "properly formatted data", that will survive the quality checks (checking for nulls), and therefore result in the main table over in `main` to be updated with the new data.
-
-#### Errors
-
-Running
-
-```bash
-python loader.py -n 1000 --verbose
-```
-
-will produce data with NULLs, so the quality check in the lambda will fail, the upload branch won't be merged and the Slack channel should notify you of the failure.
+* _no errors (i.e. no NULLs) in the ingestion data_: running `python loader.py --no-null -n 1000 --verbose` will produce properly formatted data, that will pass the quality checks in WAP; therefore the table in `main` will get updated with the new rows (which get merged automatically by the process);
+* _injecting errors in the ingestion data_: `python loader.py -n 1000 --verbose` will produce data with NULLs, so the quality check in WAP will fail; therefore, the upload branch won't be merged (will be still visible in Nessie UI, in fact) and the Slack channel should notify you of the failure.
 
 ## Bonus: querying the final table with Snowflake
 
