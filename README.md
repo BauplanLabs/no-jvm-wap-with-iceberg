@@ -65,26 +65,11 @@ Note: if you don't want to use Slack as a notification channel, leave the releva
 
 Make sure the Python environment is activated and the `.env` file is properly configured.
 
-### Start the loader
-
-Then cd into `src` and run the following command:
-
-```bash
-python loader.py --no-null -n 1000 --verbose
-```
-
-The loader will upload 1000 randomized records to `SOURCE_BUCKET`, triggering the WAP lambda.
-
-### Start the webapp
-
-#TODO: my idea is that the web app is a simple streamlit app that for example my count how many rows there are in main, so everytime your refresh it it will show the updated count.
-
-Alternatively, it could also be a query over a branch that you can specify as an input field, such that it shows how many NULLs there are in case of failures.
-
-### Scenarios
-
-* _no errors (i.e. no NULLs) in the ingestion data_: running `python loader.py --no-null -n 1000 --verbose` will produce properly formatted data, that will pass the quality checks in WAP; therefore the table in `main` will get updated with the new rows (which get merged automatically by the process);
-* _injecting errors in the ingestion data_: `python loader.py -n 1000 --verbose` will produce data with NULLs, so the quality check in WAP will fail; therefore, the upload branch won't be merged (will be still visible in Nessie UI, in fact) and the Slack channel should notify you of the failure.
+* _no errors (i.e. no NULLs) in the ingestion data_: cd into `src` and run: `python loader.py --no-null -n 1000 --verbose`. This will produce properly formatted data: when the WAP lambda gets triggered, the quality checks will succeed; the table in `main` will get updated with the new rows (which get merged automatically by the process);
+  - run `streamlit run quality_app.py` to start the quality app: open the browser at the URL provided by Streamlit to see a dashboard showing the total number of rows in `main` (every time you run the loader with no errors, the number will go up!);
+* _injecting errors in the ingestion data_: `python loader.py -n 1000 --verbose` will produce data with NULLs, so the quality check in WAP will now fail; the upload branch won't be merged (it will be still visible in Nessie UI, in fact);
+  - if you have setup Slack variables, open the Slack channel you specified and you should see a [message with the error and the name of the upload branch](images/slack.png) that failed the quality check;
+  - run `streamlit run quality_app.py` to start the quality app: open the browser at the URL provided by Streamlit and now use the branch name from Slack (the failed upload) in the input form and press ENTER: [the dashboard will show](images/app.png) you how many NULLs are in the branch you specified (which is what caused WAP to fail).
 
 ## Bonus: querying the final table with Snowflake
 
