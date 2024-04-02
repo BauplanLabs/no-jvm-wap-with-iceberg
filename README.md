@@ -17,7 +17,7 @@ If you have feedback, wish to contribute or want help with your own data lake se
 The intent of this project is mostly pedagogical, so dependencies and frameworks have been
 kept to a minimum:
 
-* AWS credentials with appropriate permissions when the local scripts run (create buckets, upload files to bucket, read from bucket, create Lightsail service);
+* AWS credentials with appropriate permissions when the local scripts run (create buckets, upload files to bucket, create Lightsail service);
 * the [serverless framework](https://www.serverless.com/framework/) to deploy the WAP lambda with one command;
 * Docker installed locally to prepare the lambda container.
 * BONUS: Slack and a Slack App token, if you wish to receive failure notifications on Slack; 

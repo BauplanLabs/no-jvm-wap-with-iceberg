@@ -43,10 +43,12 @@ datalake_location = 's3://{}'.format(os.environ['LAKE_BUCKET'])
 def get_table_from_data_lake(
     table_name: str,
     branch_name: str,
+    column: str
 ):
     _table = catalog.load_table((branch_name, table_name))
     # NOTE that this will get the full table, so it's not recommended for large tables
-    return _table.scan().to_arrow()
+    # since we are just counting rows, we can pick a single column
+    return _table.scan(selected_fields=(column,)).to_arrow()
 
 
 st.title('Data Quality App')
@@ -54,17 +56,20 @@ st.title('Data Quality App')
 # the first section reads the data from the lakehouse in the main branch
 st.subheader("Main branch")
 
-table_in_main = get_table_from_data_lake(TABLE_NAME, 'main')
+table_in_main = get_table_from_data_lake(TABLE_NAME, 'main', target_column)
 st.write("Number of rows in the main branch: ", table_in_main.num_rows)
 
+# the second section allows the user to input a branch and count the nulls in the target column
+# since un-merged branches are the result of a failed WAP, we should see some nulls here
 st.subheader("Custom branch")
 
 import_branch = st.text_input("Enter the branch name you'd like to visualize", '')
 
+# if no branch is provided, stop the app
 if not import_branch:
     st.stop()
-    
-table_in_branch = get_table_from_data_lake(TABLE_NAME, import_branch)
+
+table_in_branch = get_table_from_data_lake(TABLE_NAME, import_branch, target_column)
 st.write("Number of rows in the branch: ", table_in_branch.num_rows)
 st.write("Number of nulls in the branch for column {}: ".format(target_column), pc.count(
     table_in_branch[target_column], mode='only_null'
