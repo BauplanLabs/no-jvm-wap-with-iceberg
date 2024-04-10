@@ -1,46 +1,74 @@
 # Write-Audit-Publish on a data lake (no JVM!)
 
-## Overview
+## What on earth is Write-Audit-Publish?
 
-We aim to provide a no-nonsense, reference implementation for the Write-Audit-Publish (WAP) pattern on a data lake, using Iceberg as the open table format, Nessie as a branch-aware data catalog and PyIceberg (plus some custom Python code) as code abstraction over our tables: all the logic is expressed in Python (_no JVM!_) and all infrastructure is provisioned and run for us by AWS.
+WAP is a pattern designed to use data quality tests to make the data available in a controlled way. 
+Effectively, WAP implements strategies to run tests in a sandboxed environment and avoid that corrupted data becomes available to downstream consumers.
+As the name suggests, the patterns comprises three main steps:
 
-In the spirit of interoperability, we provide an example downstream application (a quality dashboard) - that also avoids the JVM and can run entirely within a Python interpreter -, and a bonus section on how to query the final table with Snowflake: fully leveraging the lakehouse pattern, we can move (at least some) data quality checks _outside the warehouse_ and still take advantage of Snowflake for querying certified artifacts.
+- **Write** the data being processed to a location inaccessible to downstream consumers. This could include a staging or temporary area, a branch, etc.
+- **Audit** the data and run tests to make sure it adhere to predefined quality standards.
+- **Publish** the data by writing it to the actual location where downstream consumers can access it.
+ 
+## Project overview 
+We aim to provide a no-nonsense, reference implementation for Write-Audit-Publish (WAP) patterns on a data lake, using Iceberg as an open table format, and Nessie to leverage git-like semantics of the data catalog.
+The git-like semantics provided by Nessie is a good abstraction to implement WAP and the fact that PyNessie allows to write 
+Most importantly, using PyIceberg, we will achieve all this without the JVM: the entire project, including the integrated applications can run entirely within a Python interpreter. You're welcome.
+Because PyIceberg is fairly new, there is a good chance that this could be the first implementation of a data lake catalog supporting branches that dispenses with the JVM altogether.
+This repo illustrates a simple case where we deal with one table at the time, but of course it is easy to see how things can quickly become more complex and involve multistep pipelines. The choice of using Nessie depends on the fact that we find the abstraction intuitive when it comes to pipelines.  
+
+We are going to use the following components: 
+
+- Storage: [AWS S3](https://aws.amazon.com/s3/)
+- Open table format: [Apache Iceberg](https://iceberg.apache.org/)
+- Data catalog: [Project Nessie](https://projectnessie.org/) 
+- Code implementation: [PyIceberg](https://py.iceberg.apache.org/)
+- Serverless runtime: [Lambda](https://aws.amazon.com/lambda/)
+- Virtual private server: [Lightsail](https://aws.amazon.com/lightsail/)
+- Alerting system: [Slack](https://slack.com/)
+
+The Slack integration is optional, but it's very easy to set up. 
+
+## The workflow
+This project simulates a WAP implementation for a batch ingestion process with the following flow: 
+
+- Some data in parquet format is loaded on an object store location.
+- When new data is loaded into the first object store location, a serverless application is triggered and runs on a Lambda. 
+- the serverless application creates call a Nessie catalog through a lightsail endpoint and creates an Iceberg table in a new branch of the Nessie data catalog.
+- the lambda then performs a simple data quality test checking whether a certain column in the input table contains null values. 
+- If the test is passed, the branch is merged into the main Nessie data catalog, and the serverless process will write the data into the data lake in an Iceberg table. 
+- If the test fails, the branch remains open and the lambda can optionally send an alert on Slack.
+
+![wap_flow.png](images%2Fwap_flow.png)
+  
+One of the main advantages of using open table formats like Iceberg is that they are essentially interoperable, which lies at the heart of the [Lakehouse](https://www.databricks.com/sites/default/files/2020/12/cidr_lakehouse.pdf) architecture. To this extent, we provide two examples of downstream applications: 
+
+- A [Streamlit](https://streamlit.io/) app with a dashboard to monitor data quality across different branches.
+- An integration with [Snowflake](https://www.snowflake.com/en/) to query the Iceberg tables created. 
+
+The Snowflake integration is optional, and it is frankly tedious to set up. However, it is probably the most interesting integration from an architectural point of view. Ideally, one can use this design to move _outside the warehouse_ some of the computation required for testing, data quality, or low-level ETL, while still maintaining the possibility of taking advantage of Snowflake for querying certified artifacts.
 
 Note that the project is not intended to be a production-ready solution, but rather a reference implementation that can be used as a starting point for more complex scenarios: the code is verbose and heavily commented, making it easy to modify and extend the basic concepts to better suit your use cases.
 
 If you have feedback, wish to contribute or want help with your own data lake setup, please do reach out to us at `info at bauplanlabs dot com`. 
 
+
 ## Setup
 
 ### Prerequisites
 
-The intent of this project is mostly pedagogical, so dependencies and frameworks have been
-kept to a minimum:
+The intent of this project is mostly pedagogical, so dependencies and frameworks have been kept to a minimum:
 
 * AWS credentials with appropriate permissions when the local scripts run (create buckets, upload files to bucket, create Lightsail service);
-* the [serverless framework](https://www.serverless.com/framework/) to deploy the WAP lambda with one command;
-* Docker installed locally to prepare the lambda container.
-* BONUS: Slack and a Slack App token, if you wish to receive failure notifications on Slack; 
-* BONUS: a Snowflake account if you wish to query the post-ETL table with Snowflake.
+* [Serverless](https://www.serverless.com/framework/) to deploy the lambda with one command;
+* [Docker](https://www.docker.com/) installed locally to build the container for the lambda.
+* BONUS: A Slack account and a [Slack App token](https://api.slack.com/authentication/token-types), if you wish to receive failure notifications; 
+* BONUS: a Snowflake account, if you wish to query the post-ETL table.
 
 ### Installation
 
-#### Setup the S3 buckets and the Nessie catalog
-
-In `src/serverless`, copy `local.env` to `.env` and fill the values for two buckets: `SOURCE_BUCKET` is the name of the bucket simulating ingestion of raw data, `LAKE_BUCKET` is the bucket that we connect to the data catalog, containing the Iceberg version of the data. 
-
-The buckets will get created and a Nessie server will be deployed as a Lightsail service through a simple `boto3` script:
-
-```bash
-cd src
-python setup_nessie.py -v=create -n=nessieservice
-```
-
-After the script runs, you should get in the terminal the URL of the Nessie service, which we will use to interact with the data catalog (write it down for later). _Before continuing, make sure in the Lightsail console that the service is finished deployed and the endpoint is up._
-
 #### Local environment
-
-Prepare a virtual environment and install the dependencies for the local scripts:
+Prepare a Python virtual environment and install the dependencies in the file `requirements.txt`:
 
 ```bash
 python3 -m venv venv
@@ -48,38 +76,120 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Fill the rest of the `.env` file with the following variables: `SLACK_TOKEN` and `SLACK_CHANNEL` are needed if you wish to send failure notifications to Slack - you can get an App Bot Token by creating a new Slack App in your [Slack workspace](https://api.slack.com/tutorials/tracks/getting-a-token).`NESSIE_ENDPOINT` is the URL of the Nessie service you just deployed.
+Then go into the folder `src/serverless`, copy the content of the file `local.env` into a file `.env`, and fill the values for the two buckets: 
+- `SOURCE_BUCKET` is the name of the bucket simulating the ingestion of the raw data; 
+- `LAKE_BUCKET` is the destination bucket which will be connected to the Nessie catalog and will contain data in Iceberg format. 
+- `SLACK_TOKEN` and `SLACK_CHANNEL` are needed if you wish to send failure notifications to Slack. You can get an App Token for a Bot by creating a new Slack App in your Slack workspace. Please, follow the [tutorial] (https://api.slack.com/tutorials/tracks/getting-a-token) to set up a Slack app that can be used to send alert messages. If you don't want to use Slack as a notification channel, leave this variable empty and the lambda will not attempt to send notifications.
+- `NESSIE_ENDPOINT` is the URL of the Nessie service that will be deployed using Amazon lightsail. Leave it empty for now and we will fill it in the next section.
+
+#### Set up S3 and Nessie
+
+Once the S3 fields in your `.env` file have been filled, you can run the script `setup_aws.py` to create the S3 buckets in your AWs account and to deploy a Nessie server as a Lightsail service.
+To create the Nessie server you will need to pass two arguments in the terminal: `-v` which will define the action to execute, in this case `create` and `-n` which will define the name of the container service (note that underscores are not allowed, you need to use hyphens):
+
+```shell
+cd src
+python setup_aws.py -v=create -n=nessie-service
+```
+
+Running the script should print in the terminal the URL of your freshly deployed Nessie service. Now, copy the URL, go back to your `.env` file and paste it as the value for `NESSIE_ENDPOINT`.
+Before continuing, go in the Lightsail console and make sure that the service has been deployed and the endpoint is up and running. It might take a few minutes, so be patient. 
+At the end you should be able to access your Nessie UI from the public domain provided in your Lightsail deployment.
+
+<img src="images/nessie.png" alt="Example Image" width="600">
+
+
+We assume that you are pointing at your `default` AWS profile and that your user has the necessary permissions to create interact with S3. If you want to run this project using another AWS profile of yours, you can just export your profile as a global variable in your terminal (for more on this see [AWS guide](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html#cli-configure-files-using-profiles))
+
+```shell
+export AWS_PROFILE=<your_profile>
+```
 
 #### AWS Lambda
 
-The lambda is deployed with the serverless framework, so make sure it's installed. You can deploy the lambda with:
+The lambda app is deployed through the Serverless framework, so make sure it's installed via NPM:
 
-```bash
+```shell
+npm install -g serverless
+```
+
+If you don’t already have `Node.js` on your machine, you need to install it first. See documentation [here](https://www.serverless.com/framework/docs/getting-started)
+
+To deploy the lambda, run:
+
+```shell
 cd src/serverless
 serverless deploy
 ```
+With this you should be done with the setup.
 
-Note: if you don't want to use Slack as a notification channel, leave the relevant variables in the `.env` file empty and the lambda will not attempt to send notifications.
 
 ## Run the project
 
-Make sure the Python environment is activated and the `.env` file is properly configured.
+To run the project, cd into `src` and run:
+```shell
+cd src
+python data_loader.py --no-null -n 1000 --verbose
+```
 
-* _no errors (i.e. no NULLs) in the ingestion data_: cd into `src` and run: `python loader.py --no-null -n 1000 --verbose`. This will produce properly formatted data: when the WAP lambda gets triggered, the quality checks will succeed; the table in `main` will get updated with the new rows (which get merged automatically by the process);
-  - run `streamlit run quality_app.py` to start the quality app: open the browser at the URL provided by Streamlit to see a dashboard showing the total number of rows in `main` (every time you run the loader with no errors, the number will go up!);
-* _injecting errors in the ingestion data_: `python loader.py -n 1000 --verbose` will produce data with NULLs, so the quality check in WAP will now fail; the upload branch won't be merged (it will be still visible in Nessie UI, in fact);
-  - if you have setup Slack variables, open the Slack channel you specified and you should see a [message with the error and the name of the upload branch](images/slack.png) that failed the quality check;
-  - run `streamlit run quality_app.py` to start the quality app: open the browser at the URL provided by Streamlit and now use the branch name from Slack (the failed upload) in the input form and press ENTER: [the dashboard will show](images/app.png) you how many NULLs are in the branch you specified (which is what caused WAP to fail).
+This will trigger the following flow:
+- A synthetic dataset of 1000 rows is created as a temporary Parquet with the following schema: 
+
+```
+my_col_0: int32
+my_col_1: string
+my_col_2: double
+```
+
+- The file is uploaded on AWS S3 to your `SOURCE_BUCKET`.
+- The Lambda application is then triggered, creates an upload branch in the Nessie catalog and writes the data into an Iceberg table in it.
+- An expectation quality test is performed to check whether the values of the column `my_col_1` include some NULLs.
+- Because we passed the flag `--no-null` when the script was launched, the generated dataset will contain no null values, causing the test to pass.
+- The branch is merged in the `main` branch of the data catalog.
+
+Now, you can simulate what would happen in the WAP pattern, if the data uploaded did not pass the expectation test To do that, simply remove the flag `--no-null`:
+
+```shell
+`python loader.py -n 1000 --verbose`
+```
+
+This will trigger the same flow as before, but it will produce a data on row of NULL values, causing the quality check to fail. As a consequence, the upload branch won't be merged, and it will remain visible in Nessie UI. If you have set up Slack variables in your `.env` file, you should receive a message with the error and the name of the upload branch in the open the specified channel:
+
+<img src="images/slack.png" alt="Example Image" width="600">
+
+
+You can  use this template to customize the data upload with the data that you prefer and implement different quality tests depending on your need.
+
+## Data quality app
+To monitor the WAP process you can use a simple visualization app included in this project.
+
+```python
+streamlit run quality_app.py
+```
+
+Open the browser at the URL provided by Streamlit to see a dashboard showing the total number of rows in `main` (every time you run the loader with no errors, the number will go up!).
+If you want to see what is happening on those branches that failed to pass the expectation test, you can copy the name of a branch from your Nessie UI (or from the Slack alert message, if you set up Slack) and pasted in the Streamlit app.
+The dashboard will show you how many NULLs are in the branch you specified, giving you visibility on what ultimately caused the WAP flow to fail.
+
+<img src="images/app.png" alt="Example Image" width="600">
+
 
 ## Bonus: querying the final table with Snowflake
 
-A consequence of using Iceberg tables for ingestions and ETL is that we can move out of the warehouse costly data quality checks and still leverage the warehouse for querying the final, certified data. In this bonus section, we show how to query the final table in Snowflake.
+A consequence of using Iceberg tables for ingestion and ETL is that we can move out of the warehouse expensive computation run for data quality checks and still leverage the warehouse for querying the final, certified data. In this bonus section, we show how to query the final table in Snowflake.
+Setting up Snowflake to query the table we created in the data lake is quite cumbersome but not hard: unfortunately, it is a manual process going back and forth between AWS IAM roles and Snowflake instructions. 
 
-Settinp up Snowflake to query the table we created in the data lake is quite cumbersome but not hard: unfortunately, it is a manual process going back and forth between AWS IAM roles and Snowflake instructions, as detailed in these three steps (you need all three):
+There are three steps:
+### 1. Set up an external volume
+First, you'll need to configure your data lake as an [external volume in Snowflake](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume)
+This process involved setting up the IAM role and permissions needed to add your S3 data lake as an external volume. You can skip the part on encryption. 
 
-* add your S3 bucket with the data lake file as an [external volume](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-external-volume);
-* configure an [external catalog](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration) for Iceberg tables;
-* finally, [create a Snowflake table from Iceberge metadata](https://docs.snowflake.com/en/user-guide/tables-iceberg-create#label-tables-iceberg-create-catalog-int) (it's a no-op, only involving metadata): to finalize it, check the current metadata file associated with the table in the main branch in [Nessie][images/nessie.png] and use the `METADATA_FILE_PATH` to create the table in Snowflake -> e.g.
+### 2. Configure an external Iceberg catalog
+Second, you'll need to configure an external catalog for Iceberg tables. To do that follow the first part of the Snowflake guide [here](https://docs.snowflake.com/en/user-guide/tables-iceberg-configure-catalog-integration).
+
+### 3. Create an Iceberg table from your data lake
+Third, you'll need to [create a Snowflake table from Iceberg metadata](https://docs.snowflake.com/en/user-guide/tables-iceberg-create#label-tables-iceberg-create-catalog-int). This s a no-op, only involving metadata. 
+Follow the instructions in the Snowflake guide to `Create an Iceberg table from Iceberg files in object storage`. You will need to check the current metadata file associated with the table in the `main` branch in [Nessie][images/nessie_metadata.png] and use the `METADATA_FILE_PATH` to create the table in Snowflake.
 
 ```sql
 CREATE ICEBERG TABLE customer_cleaned_data
@@ -88,7 +198,11 @@ CREATE ICEBERG TABLE customer_cleaned_data
   METADATA_FILE_PATH='metadata/0000xxx-xxxx-xxxxx.metadata.json';
 ```
 
-In this case, we are creating a Snowflake external table called `CUSTOMER_CLEANED_DATA` that represents the rows in our ingestion table after they have been certified by our WAP process. Once you have the table, you can run any query [you like in the Snwoflake UI](images/snowflake.png): e.g. we compute the sum of a column, the average of another and the total number of rows in the table (note that the total number of rows is the same as what is displayed in our webapp above!):
+In this case, we are creating a Snowflake external table called `CUSTOMER_CLEANED_DATA` that represents the rows in our ingestion table after they have been certified by our WAP process. Remember that since the Nessie catalog is deployed as a virtual private server with Lightsail, this metadata will change at each deployment.
+in other words, if you run this project from scratch twice, you will have to change that in your Snowflake code and run it again.
+
+### 4. Query and explore data
+Finally, you can run an arbitrary query in a Snowflake SQL worksheet. For instance: 
 
 ```sql
 SELECT SUM(MY_COL_0), AVG(MY_COL_2), COUNT(*) AS TOT_ROWS FROM CUSTOMER_CLEANED_DATA;
@@ -98,9 +212,6 @@ Of course, now that the volume and the external catalog are set up, we could lev
 
 We leave this as an exercise to the reader!
 
-## FAQs
-
-#TODO
 
 ## License
 

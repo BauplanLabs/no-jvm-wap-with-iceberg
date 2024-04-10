@@ -10,7 +10,7 @@ our integration with PyNessie and monkey patching) and provide the WAP logic:
 * read the new rows from the S3 event into an arrow table;
 * create an uploading new branch in the Nessie catalog from main;
 * append the new rows to the table in the branch;
-* run a quality check on the new rows re-using PyCessie to scan the table back in the branch;
+* run a quality check on the new rows re-using PyNessie to scan the table back in the branch;
 * if the quality check is successful, merge the branch into the main table.
 
 """
@@ -36,7 +36,7 @@ fw.preload()
 
 # name of the table in the Nessie catalog
 # we have only one table, to which we append the new rows
-# as they come in in the source bucket
+# as they come in the source bucket
 TABLE_NAME = 'customer_data_log'
 
 
@@ -68,7 +68,7 @@ def send_slack_alert(
     Send a slack alert to the channel specified in the environment variables.
     
     If no Slack related envs are specified, we assume that we don't want to send
-    any notifications and we just return.
+    any notifications, and we just return.
     
     """
     # we first check if the slack envs are set
@@ -147,7 +147,7 @@ def create_table_if_not_exists(catalog, table_name, branch, schema, datalake_loc
 def create_branch_from_main(catalog):
     """
     
-    Create a random branch with a human readable name starting from main.
+    Create a random branch with a human-readable name starting from main.
     
     """
     
@@ -177,6 +177,7 @@ def append_rows_to_table_in_branch(
         return False
     
     return True
+
 
 @measure_func
 def run_quality_checks(
@@ -314,6 +315,3 @@ def lambda_handler(event, context):
                 print("Slack alert sent")
 
     return None
-
-
-

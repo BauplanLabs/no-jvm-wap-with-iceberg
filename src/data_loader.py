@@ -28,6 +28,7 @@ import tempfile
 from random import randint, seed, random
 seed(10)
 # preload the friendlywords package
+# we will use friendlywords to populate the columns of our tables with string type
 import friendlywords as fw
 fw.preload()
 
@@ -60,7 +61,7 @@ def get_random_array_from_type(
     Based on the arrow type, generate a pyArrow array which will become a column
     in the final table. If you need more types, add them here.
     
-    If the flag no_null is passed, we add a null value to each column: this will
+    If the flag no_null = False is passed, we add a null value to each column: this will
     simulate a "faulty" batch of rows, and any test for no-nulls downstream will
     therefore fail.
     
@@ -72,7 +73,7 @@ def get_random_array_from_type(
     elif field.type == pa.string():
         return pa.array([fw.generate('ppo', separator=' ') for _ in range(rows)] + a)
     elif field.type == pa.float64():
-        return pa.array([float(_ * random())  for _ in range(rows)] + a)
+        return pa.array([float(_ * random()) for _ in range(rows)] + a)
     else:
         raise ValueError('Unsupported type: {}'.format(field.type))
 
@@ -109,7 +110,7 @@ def generate_table(
     # first get the schema
     schema = generate_schema()
     if verbose:
-        print("Generated schema: {}".format(schema))
+        print("Generated schema:\n{}".format(schema))
     # then generate the table as in-memory arrow table
     arrow_table = generate_table_from_schema(n, schema, no_null=no_null)
     # make sure the table has the right size
@@ -180,6 +181,7 @@ def load_raw_data_to_s3(
 
 
 if __name__ == "__main__":
+
     import argparse
     # parse arguments
     parser = argparse.ArgumentParser()
@@ -201,4 +203,3 @@ if __name__ == "__main__":
         no_null=parser.parse_args().no_null,
         verbose=parser.parse_args().verbose
     )
-
