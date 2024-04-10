@@ -1,6 +1,6 @@
 """
 
-Amazon Lightsail is a lighweight service for running small containerized apps, such as a Nessie server
+Amazon Lightsail is a lightweight service for running small containerized apps, such as a Nessie server
 for a prototype (https://projectnessie.org/try/docker/). Since we already assume familiarity with Python and boto3
 in the project, we wrote a small script that deploys a containerized Nessie catalog to Lightsail. The basic
 catalog is not suited for production use cases, but it's more than enough for our prototype (plus, using boto3 help us
@@ -24,6 +24,7 @@ correctly as specified in the README.
 
 import boto3
 import os
+import json
 
 
 def deploy_lightsail_application(
@@ -132,6 +133,9 @@ def create_buckets(
         print(f"Lake bucket {lake_bucket} created.")
     
     return True
+
+
+
 
 
 if __name__ == '__main__':
