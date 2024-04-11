@@ -145,7 +145,7 @@ my_col_2: double
 Now, you can simulate what would happen in the WAP pattern, if the data uploaded did not pass the expectation test To do that, simply remove the flag `--no-null`:
 
 ```shell
-`python loader.py -n 1000 --verbose`
+python data_loader.py -n 1000 --verbose
 ```
 
 This will trigger the same flow as before, but it will produce rows with NULL value in them, causing the quality check to fail. As a consequence, the upload branch won't be merged, and it will remain visible in Nessie UI. If you have set up Slack variables in your `.env` file, you should receive a message with the error and the name of the upload branch in the specified channel:
