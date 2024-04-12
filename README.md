@@ -7,6 +7,8 @@ WAP is a pattern designed to use data quality tests to make the data available i
 - **Write** the data being processed to a location inaccessible to downstream consumers. This could include a staging or temporary area, a branch, etc.
 - **Audit** the data and run tests to make sure it adhere to predefined quality standards.
 - **Publish** the data by writing it to the actual location where downstream consumers can access it.
+
+This repo has a companion [blog post](https://towardsdatascience.com/write-audit-publish-for-data-lakes-in-pure-python-no-jvm-25fbd971b17d) on Towards Data Science, with in-depth discussion about the context for the project and the general lakehouse landscape: reach out if anything rings a bell!
  
 ## Project overview 
 We aim to provide a no-nonsense, reference implementation for Write-Audit-Publish (WAP) patterns on a data lake, using Iceberg as an open table format, and Nessie to leverage git-like semantics of the data catalog.
